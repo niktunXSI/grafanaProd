@@ -5,11 +5,16 @@ import (
 	"errors"
 	"testing"
 
+	authlib "github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apiserver/pkg/admission"
 
 	dashv0 "github.com/grafana/grafana/apps/dashboard/pkg/apis/dashboard/v0alpha1"
+	"github.com/grafana/grafana/apps/dashboard/pkg/migration/testutil"
+	"github.com/grafana/grafana/pkg/apimachinery/utils"
 )
 
 type recordingLifecycleExtras struct {
@@ -26,6 +31,8 @@ func (r *recordingLifecycleExtras) Validate(context.Context, admission.Attribute
 	r.validateCalls++
 	return r.validateErr
 }
+
+func (r *recordingLifecycleExtras) HideDraftsByDefault(context.Context) bool { return false }
 
 func dashboardAttrs(op admission.Operation) admission.Attributes {
 	return admission.NewAttributesRecord(
@@ -132,9 +139,69 @@ func TestLifecycleDefaultsToNoop(t *testing.T) {
 		require.Equal(t, NoopDashboardLifecycleExtras{}, b.lifecycle())
 	})
 
-	t.Run("no-op neither changes nor rejects anything", func(t *testing.T) {
+	t.Run("no-op neither changes nor rejects anything and does not hide drafts", func(t *testing.T) {
 		extras := ProvideNoopDashboardLifecycleExtras()
 		require.NoError(t, extras.Mutate(t.Context(), nil))
 		require.NoError(t, extras.Validate(t.Context(), nil))
+		require.False(t, extras.HideDraftsByDefault(t.Context()))
 	})
+}
+
+func TestApplyDraftListSelector(t *testing.T) {
+	draft := labels.Set{utils.LabelKeyLifecycle: utils.LifecycleDraft}
+	published := labels.Set{}
+
+	tests := []struct {
+		name           string
+		selector       string
+		hide           bool
+		want           string
+		matchDraft     bool
+		matchPublished bool
+	}{
+		{name: "noop when not hiding", selector: "", hide: false, want: "", matchDraft: true, matchPublished: true},
+		{name: "hide drafts by default", selector: "", hide: true, want: "grafana.app/lifecycle notin (draft)", matchDraft: false, matchPublished: true},
+		{name: "include-drafts opts in", selector: "grafana.app/include-drafts=true", hide: true, want: "", matchDraft: true, matchPublished: true},
+		{name: "include-drafts is stripped when not hiding", selector: "grafana.app/include-drafts=true", hide: false, want: "", matchDraft: true, matchPublished: true},
+		{name: "explicit lifecycle is kept", selector: "grafana.app/lifecycle=draft", hide: true, want: "grafana.app/lifecycle=draft", matchDraft: true, matchPublished: false},
+		{name: "trash is left alone", selector: "grafana.app/get-trash=true", hide: true, want: "grafana.app/get-trash=true"},
+		{name: "other labels are kept", selector: "team=a", hide: true, want: "grafana.app/lifecycle notin (draft),team=a"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sel, err := labels.Parse(tt.selector)
+			require.NoError(t, err)
+			got := applyDraftListSelector(sel, tt.hide)
+			require.Equal(t, tt.want, got.String())
+			if tt.matchDraft || tt.matchPublished {
+				require.Equal(t, tt.matchDraft, got.Matches(draft))
+				require.Equal(t, tt.matchPublished, got.Matches(published))
+			}
+		})
+	}
+
+	require.Equal(t, "grafana.app/lifecycle notin (draft)", applyDraftListSelector(nil, true).String())
+}
+
+func TestDraftSearchRequirement(t *testing.T) {
+	require.Nil(t, draftSearchRequirement("", false))
+	require.Nil(t, draftSearchRequirement("all", true))
+
+	r := draftSearchRequirement("", true)
+	require.Equal(t, utils.LabelKeyLifecycle, r.Key)
+	require.Equal(t, string(selection.NotIn), r.Operator)
+	require.Equal(t, []string{utils.LifecycleDraft}, r.Values)
+
+	r = draftSearchRequirement("draft", false)
+	require.Equal(t, string(selection.Equals), r.Operator)
+}
+
+func TestNewAPIServiceWiresLifecycleExtras(t *testing.T) {
+	extras := hideDraftsExtras{}
+	search := &SearchHandler{}
+	b := NewAPIService(authlib.FixedAccessClient(true), nil, testutil.NewDataSourceProvider(testutil.StandardTestConfig), testutil.NewLibraryElementProvider(), nil, search, nil, nil, extras)
+
+	require.Equal(t, extras, b.lifecycleExtras)
+	require.Equal(t, extras, search.lifecycleExtras)
 }

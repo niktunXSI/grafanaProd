@@ -54,6 +54,8 @@ type SearchHandler struct {
 	client   resourcepb.ResourceIndexClient
 	tracer   trace.Tracer
 	features featuremgmt.FeatureToggles
+
+	lifecycleExtras DashboardLifecycleExtras
 }
 
 func NewSearchHandler(tracer trace.Tracer, resourceClient resource.ResourceClient, features featuremgmt.FeatureToggles) *SearchHandler {
@@ -97,6 +99,15 @@ func (s *SearchHandler) GetAPIRoutes(defs map[string]common.OpenAPIDefinition) *
 										Description: "user query string",
 										Required:    false,
 										Schema:      spec.StringProperty(),
+									},
+								},
+								{
+									ParameterProps: spec3.ParameterProps{
+										Name:        "lifecycle",
+										In:          "query",
+										Description: "dashboard lifecycle filter: draft returns only drafts, all returns drafts and published. When empty, drafts are hidden if the namespace hides them by default",
+										Required:    false,
+										Schema:      spec.StringProperty().WithEnum("draft", "all"),
 									},
 								},
 								{
@@ -613,6 +624,11 @@ func (s *SearchHandler) DoSearch(w http.ResponseWriter, r *http.Request) {
 			errhttp.Write(ctx, err, w)
 		}
 		return
+	}
+
+	hideDrafts := s.lifecycleExtras != nil && s.lifecycleExtras.HideDraftsByDefault(ctx)
+	if req := draftSearchRequirement(queryParams.Get("lifecycle"), hideDrafts); req != nil {
+		searchRequest.Options.Labels = append(searchRequest.Options.Labels, req)
 	}
 
 	result, err := s.client.Search(ctx, searchRequest)
@@ -1281,4 +1297,19 @@ func nameLookupRequest(key *resourcepb.ResourceKey, names []string, permission d
 			}},
 		},
 	}
+}
+
+// draftSearchRequirement maps the `lifecycle` query param to a label requirement:
+// "draft" returns only drafts, "all" returns everything, and no value hides drafts when hideDrafts is set.
+func draftSearchRequirement(lifecycle string, hideDrafts bool) *resourcepb.Requirement {
+	switch lifecycle {
+	case utils.LifecycleDraft:
+		return &resourcepb.Requirement{Key: utils.LabelKeyLifecycle, Operator: string(selection.Equals), Values: []string{utils.LifecycleDraft}}
+	case "all":
+		return nil
+	}
+	if !hideDrafts {
+		return nil
+	}
+	return &resourcepb.Requirement{Key: utils.LabelKeyLifecycle, Operator: string(selection.NotIn), Values: []string{utils.LifecycleDraft}}
 }
