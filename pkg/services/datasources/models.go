@@ -71,6 +71,12 @@ type DataSource struct {
 	// swagger:ignore
 	IsPrunable bool `xorm:"is_prunable"`
 
+	// Annotations holds metadata.annotations of the app platform API: the manager
+	// and source properties that identify who provisioned this data source and from
+	// where. Annotations the SQL columns above already carry are not stored here.
+	// swagger:ignore
+	Annotations map[string]string `json:"-" xorm:"annotations"`
+
 	Created time.Time `json:"created,omitempty"`
 	Updated time.Time `json:"updated,omitempty"`
 
@@ -179,6 +185,9 @@ type AddDataSourceCommand struct {
 	// swagger:ignore
 	IsPrunable bool `json:"-"`
 
+	// Never settable through the legacy HTTP API.
+	Annotations map[string]string `json:"-"`
+
 	OrgID                   int64             `json:"-"`
 	UserID                  int64             `json:"-"`
 	ReadOnly                bool              `json:"-"`
@@ -213,6 +222,15 @@ type UpdateDataSourceCommand struct {
 
 	// The previous version -- used for optimistic locking
 	Version int `json:"version"`
+
+	// Never settable through the legacy HTTP API.
+	Annotations map[string]string `json:"-"`
+
+	// UpdateAnnotations marks the caller authoritative for Annotations: they are
+	// written as given, including cleared. Callers that leave it false keep whatever is
+	// already stored, so an edit that knows nothing about annotations (the legacy HTTP
+	// API) cannot silently release a provisioned data source.
+	UpdateAnnotations bool `json:"-"`
 
 	OrgID                   int64             `json:"-"`
 	ID                      int64             `json:"-"`

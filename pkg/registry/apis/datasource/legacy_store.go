@@ -21,6 +21,7 @@ import (
 	"github.com/grafana/grafana/pkg/registry/apis/datasource/converter"
 	"github.com/grafana/grafana/pkg/services/datasources"
 	"github.com/grafana/grafana/pkg/storage/legacysql/dualwrite"
+	"github.com/grafana/grafana/pkg/storage/legacysql/legacyannotations"
 )
 
 var (
@@ -169,6 +170,10 @@ func (s *legacyStorage) prepareUpdate(ctx context.Context, name string, objInfo 
 	oldDS, ok := old.(*v0alpha1.DataSource)
 	if !ok {
 		return nil, fmt.Errorf("expected a datasource object (old)")
+	}
+
+	if err := legacyannotations.CheckManagerOnUpdate(ctx, ds, oldDS); err != nil {
+		return nil, err
 	}
 
 	// Expose any secure value changes to the dual writer
