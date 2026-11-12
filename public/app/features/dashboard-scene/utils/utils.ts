@@ -25,6 +25,7 @@ import { type RowItem } from 'app/features/dashboard-scene/scene/layout-rows/Row
 import { type TabItem } from 'app/features/dashboard-scene/scene/layout-tabs/TabItem';
 import { initialIntervalVariableModelState } from 'app/features/variables/interval/reducer';
 
+import { PanelDataLayerSet } from '../scene/DashboardDataLayerSet';
 import { DashboardDatasourceBehaviour } from '../scene/DashboardDatasourceBehaviour';
 import { type DashboardLayoutOrchestrator } from '../scene/DashboardLayoutOrchestrator';
 import { DashboardScene } from '../scene/DashboardScene';
@@ -233,6 +234,7 @@ export async function getDefaultVizPanel(): Promise<VizPanel> {
     $data: datasourceSettings
       ? new SceneDataTransformer({
           $data: new SceneQueryRunner({
+            $data: new PanelDataLayerSet(),
             queries: [{ refId: 'A' }],
             datasource: getDataSourceRef(datasourceSettings),
             $behaviors: [new DashboardDatasourceBehaviour({})],
