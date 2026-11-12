@@ -8,6 +8,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
@@ -76,6 +77,65 @@ func (p *Permissions) DeletePermissions(ctx context.Context, namespace, name str
 		return fmt.Errorf("delete resource permission %s/%s: %w", namespace, rpName, err)
 	}
 	return nil
+}
+
+// SetDefault creates the ResourcePermission for a resource or replaces all its grants.
+func (p *Permissions) SetDefault(ctx context.Context, namespace, name string, permissions []iamv0.ResourcePermissionspecPermission) error {
+	ns, err := authlib.ParseNamespace(namespace)
+	if err != nil {
+		return fmt.Errorf("parse namespace: %w", err)
+	}
+	client, err := p.client(ctx)
+	if err != nil {
+		return fmt.Errorf("get IAM resource permission client: %w", err)
+	}
+	if client == nil {
+		return fmt.Errorf("IAM resource permission client is not configured")
+	}
+
+	ctx = identity.WithServiceIdentityContext(ctx, ns.OrgID)
+	rpName := Name(p.gr, name)
+	resource := client.Namespace(namespace)
+	current, err := resource.Get(ctx, rpName, metav1.GetOptions{})
+	if err == nil {
+		updated := current.DeepCopy()
+		if err := unstructured.SetNestedSlice(updated.Object, permissionValues(permissions), "spec", "permissions"); err != nil {
+			return fmt.Errorf("set resource permission grants: %w", err)
+		}
+		if _, err := resource.Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update resource permission %s/%s: %w", namespace, rpName, err)
+		}
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("get resource permission %s/%s: %w", namespace, rpName, err)
+	}
+
+	created := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": iamv0.ResourcePermissionInfo.GroupVersion().String(),
+		"kind":       iamv0.ResourcePermissionInfo.GroupVersionKind().Kind,
+		"metadata":   map[string]any{"namespace": namespace, "name": rpName},
+		"spec": map[string]any{
+			"resource":    map[string]any{"apiGroup": p.gr.Group, "resource": p.gr.Resource, "name": name},
+			"permissions": permissionValues(permissions),
+		},
+	}}
+	if _, err := resource.Create(ctx, created, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("create resource permission %s/%s: %w", namespace, rpName, err)
+	}
+	return nil
+}
+
+func permissionValues(permissions []iamv0.ResourcePermissionspecPermission) []any {
+	values := make([]any, 0, len(permissions))
+	for _, permission := range permissions {
+		values = append(values, map[string]any{
+			"kind": string(permission.Kind),
+			"name": permission.Name,
+			"verb": permission.Verb,
+		})
+	}
+	return values
 }
 
 func (p *Permissions) delete(ctx context.Context, namespace, name string) error {
