@@ -1184,6 +1184,7 @@ scripts/verify-pkg-stig.sh @grafana/grafana-backend-services-squad
 /scripts/clean-git-or-error.sh @grafana/grafana-as-code
 /scripts/grafana-server/ @grafana/grafana-frontend-platform
 /scripts/check-frontend-dev.sh @grafana/grafana-frontend-platform
+/scripts/jest-sucrase.test.cjs @grafana/grafana-frontend-platform
 /scripts/check-enterprise-linked.sh @grafana/grafana-frontend-platform
 /scripts/helpers/ @grafana/grafana-backend-services-squad
 /scripts/import_many_dashboards.sh @torkelo
