@@ -2184,7 +2184,7 @@ var (
 		{
 			Name:         "plugins.useMTPlugins",
 			Description:  "Enables plugins decoupling from bootdata",
-			Stage:        FeatureStageExperimental,
+			Stage:        FeatureStageGeneralAvailability,
 			Owner:        grafanaCatalogSquad,
 			Generate:     Generate{Go: true, React: true},
 			Expression:   "false",
@@ -3498,6 +3498,15 @@ var (
 			Owner:       grafanaDashboardsSquad,
 			Expression:  "false",
 			Generate:    Generate{React: true},
+		},
+		{
+			Name:         "plugins.disableMTPluginsFallback",
+			Description:  "Disables the ST fallback for multi-tenant plugin api calls",
+			Stage:        FeatureStageExperimental,
+			Owner:        grafanaFrontendPlatformSquad,
+			Generate:     Generate{React: true},
+			Expression:   "false",
+			HideFromDocs: true,
 		},
 
 		// tl;dr: name your new flag `component.featureName`, specify Go and/or React generation targets, and use with OpenFeature!
