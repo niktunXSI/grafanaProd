@@ -29,6 +29,7 @@ import { getQueryRunnerFor } from '../utils/getQueryRunnerFor';
 import { getDashboardSceneFor, isNewPanelQueryErrorsUIEnabled } from '../utils/utils';
 import { getPanelIdForVizPanel } from '../utils/utils-panels';
 
+import { PanelDataLayerSet } from './DashboardDataLayerSet';
 import { type DashboardScene } from './DashboardScene';
 import { refuseWhilePlanning } from './refuseWhilePlanning';
 import { setupPanelNotices } from './setupPanelNotices';
@@ -382,6 +383,17 @@ function reRunBuiltInAnnotationsLayer(scene: DashboardScene) {
   const layer = getBuiltInAnnotationsLayer(scene);
   if (layer) {
     layer.runLayer();
+
+    for (const set of sceneGraph.findAllObjects(scene, (obj) => obj instanceof PanelDataLayerSet && obj.isActive)) {
+      if (set instanceof PanelDataLayerSet) {
+        for (const ref of set.state.layers) {
+          const annotation = ref.resolve();
+          if (annotation.state.isEnabled && annotation.state.query.builtIn) {
+            annotation.runLayer();
+          }
+        }
+      }
+    }
   }
 }
 
