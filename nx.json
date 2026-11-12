@@ -36,7 +36,18 @@
       },
       "plugin-compat": {
         "projects": ["@grafana/plugin-compat"],
-        "projectsRelationship": "independent"
+        "projectsRelationship": "independent",
+        "version": {
+          "conventionalCommits": true
+        },
+        "changelog": {
+          "file": "{projectRoot}/CHANGELOG.md",
+          "renderOptions": {
+            "authors": false,
+            "commitReferences": true,
+            "versionTitleDate": true
+          }
+        }
       }
     },
     "version": {
@@ -54,7 +65,12 @@
     },
     "changelog": {
       "workspaceChangelog": false,
-      "projectChangelogs": false
+      "projectChangelogs": false,
+      "git": {
+        "commit": false,
+        "tag": false,
+        "stageChanges": false
+      }
     }
   }
 }
