@@ -1,6 +1,6 @@
 import { css } from '@emotion/css';
 import { once } from 'lodash';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type DataSourceInstanceSettings, type DataSourceRef, type GrafanaTheme2 } from '@grafana/data';
 import { Trans, t } from '@grafana/i18n';
@@ -14,7 +14,6 @@ import { useDatasources } from '../../hooks';
 import { AddNewDataSourceButton } from './AddNewDataSourceButton';
 import { BuiltInDataSourceList } from './BuiltInDataSourceList';
 import { DataSourceList } from './DataSourceList';
-import { matchDataSourceWithSearch } from './utils';
 
 const INTERACTION_EVENT_NAME = 'dashboards_dspickermodal_clicked';
 const INTERACTION_ITEM = {
@@ -69,6 +68,11 @@ export function DataSourceModal({
   const analyticsInteractionSrc = reportedInteractionFrom || 'modal';
   const favoriteDataSources = useFavoriteDatasources();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const excludeBuiltInsAndApplyCallerFilter = useCallback(
+    (ds: DataSourceInstanceSettings) => (filter ? filter(ds) : true) && !ds.meta.builtIn,
+    [filter]
+  );
 
   const onDismissModal = () => {
     onDismiss();
@@ -177,7 +181,8 @@ export function DataSourceModal({
                 src: analyticsInteractionSrc,
               })
             }
-            filter={(ds) => (filter ? filter?.(ds) : true) && matchDataSourceWithSearch(ds, search) && !ds.meta.builtIn}
+            searchTerm={search}
+            nonSearchFilter={excludeBuiltInsAndApplyCallerFilter}
             variables={variables}
             tracing={tracing}
             metrics={metrics}
