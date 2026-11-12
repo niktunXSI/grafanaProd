@@ -3490,6 +3490,15 @@ var (
 			Expression:  "false",
 			Generate:    Generate{React: true},
 		},
+		{
+			Name:         "datasources.gatewayRateLimits",
+			Description:  "Enable support for query gateway rate limits",
+			Stage:        FeatureStageExperimental,
+			Owner:        grafanaDataSourcesPlugins,
+			HideFromDocs: true,
+			Expression:   "false",
+			Generate:     Generate{Go: true, React: true},
+		},
 
 		// tl;dr: name your new flag `component.featureName`, specify Go and/or React generation targets, and use with OpenFeature!
 		//
