@@ -200,11 +200,16 @@ func checkExportQuota(ctx context.Context, cfg *provisioning.Repository, options
 // The supported set is identified by group+kind; the plural resource used to match the
 // stats is resolved via discovery.
 func countSupportedResources(ctx context.Context, stats []provisioning.ResourceCount, clients resources.ResourceClients) (int64, error) {
+	logger := logging.FromContext(ctx)
 	supported := make(map[schema.GroupResource]bool)
 	for _, kind := range clients.SupportedResources() {
 		_, gvr, err := clients.ForKind(ctx, schema.GroupVersionKind{Group: kind.Group, Kind: kind.Kind})
 		if err != nil {
-			return 0, fmt.Errorf("resolve client for %s/%s: %w", kind.Group, kind.Kind, err)
+			// A kind nobody serves contributes nothing to export; failing here would block an
+			// export of the kinds that do resolve.
+			logger.Warn("skipping unresolvable kind in quota pre-count",
+				"group", kind.Group, "kind", kind.Kind, "error", err)
+			continue
 		}
 		supported[gvr.GroupResource()] = true
 		// The index counts a collection's members under the collection's group, so matching the

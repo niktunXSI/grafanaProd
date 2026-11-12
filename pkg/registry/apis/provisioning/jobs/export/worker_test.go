@@ -931,6 +931,28 @@ func TestCountSupportedResources(t *testing.T) {
 	}
 }
 
+// A kind nobody serves contributes nothing to export, so it must not fail the quota pre-count.
+func TestCountSupportedResourcesSkipsUnresolvableKind(t *testing.T) {
+	clients := resources.NewMockResourceClients(t)
+	clients.EXPECT().SupportedResources().Return([]resources.SupportedResource{
+		{GroupKind: schema.GroupKind{Group: "dashboard.grafana.app", Kind: "Dashboard"}},
+		{GroupKind: schema.GroupKind{Group: "unserved.grafana.app", Kind: "Gone"}},
+	})
+	clients.EXPECT().ForKind(mock.Anything, mock.Anything).RunAndReturn(
+		func(_ context.Context, gvk schema.GroupVersionKind) (dynamic.ResourceInterface, schema.GroupVersionResource, error) {
+			if gvk.Kind == "Gone" {
+				return nil, schema.GroupVersionResource{}, fmt.Errorf("preferred version not found")
+			}
+			return nil, schema.GroupVersionResource{Group: gvk.Group, Version: "v1", Resource: "dashboards"}, nil
+		})
+
+	got, err := countSupportedResources(context.Background(), []v0alpha1.ResourceCount{
+		{Group: "dashboard.grafana.app", Resource: "dashboards", Count: 7},
+	}, clients)
+	require.NoError(t, err)
+	assert.Equal(t, int64(7), got)
+}
+
 func TestCheckExportQuota(t *testing.T) {
 	tests := []struct {
 		name        string
